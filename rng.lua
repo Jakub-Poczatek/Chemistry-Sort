@@ -27,7 +27,7 @@ rng.random = function(min, max)
 
     -- no arguments, returns a random number in the range [0, 1). That is, zero up to but excluding 1.
     if min == nil then 
-        return rng.rand() / (rng.MAX-1)
+        return math.min(1, rng.rand() / (rng.MAX-1))
     end
 
     -- 1 argument, returns an integer in the range [1, n]. That is from 1 up to and including n.
@@ -37,7 +37,7 @@ rng.random = function(min, max)
     end
 
     -- 2 arguments, returns an integer in the range [n, u]. That is from n up to and including u.
-    return min + (max-min) * rng.rand() / (rng.MAX-1)
+    return math.min(max,math.floor(min + (max+1-min) * rng.rand() / (rng.MAX-1)))
 
 end
 
