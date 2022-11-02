@@ -37,7 +37,7 @@ rng.random = function(min, max)
     end
 
     -- 2 arguments, returns an integer in the range [n, u]. That is from n up to and including u.
-    return math.min(max,math.floor(min + (max+1-min) * rng.rand() / (rng.MAX-1)))
+    return math.min(max, math.floor(min + (max + 1 - min) * rng.rand() / (rng.MAX-1)))
 
 end
 
