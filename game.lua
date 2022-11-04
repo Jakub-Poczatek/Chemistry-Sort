@@ -12,10 +12,26 @@ local scene = composer.newScene()
 -- Scene event functions
 -- -----------------------------------------------------------------------------------
 
+-- Scene Groups
 local uiGroup
 local mainGroup
 
+-- Function forward declerations
+local startLevel
+local removeDrop
+local addDrop
+local search
+local printSolution
+local printState
+local isAllSolved
+
+-- UI Variables
 local uiFontSize = 15
+local movesText
+local timeText
+local scoreText
+
+
 local FULL = 4  -- number of drops to full a tube
 -- local level = {1,2,2,90}
 -- local level = {2,2,3,90}
@@ -46,17 +62,10 @@ local solution = {}
 local timeRemaining
 local timeRemainingTimer
 local levelOver = false
-local movesText
-local timeText
-local scoreText
-
-local printState
 
 local function quit()
     print("Not implemented - quit")
 end
-
-local startLevel
 
 local function reset()
     -- remove existing display objects
@@ -79,8 +88,6 @@ local function reset()
     startLevel(level)
 end
 
-local removeDrop
-local addDrop
 local function undo()
     if #moves==0 then return end
     local move = table.remove(moves)
@@ -91,15 +98,29 @@ local function undo()
 end
 
 local function hint()
-    print("Not implemented - hint")    
+    local bestMove = search()
+
+    local fromTube = tubes[bestMove.from]
+    local drop = fromTube.drops[#fromTube.drops]
+    local toTube = tubes[bestMove.to]
+
+    transition.moveTo(drop, {x=toTube.x, y=toTube.y + 69 - (#toTube.drops) * 42, time=300, 
+        onComplete=function ()
+            transition.moveTo(drop, {x=toTube.x, y=toTube.y + 69 - (#toTube.drops) * 42, time=750, 
+                onComplete=function ()
+                    transition.moveTo(drop, {x=fromTube.x, y=fromTube.y + 69 - (#fromTube.drops-1) * 42, time=300})
+                end})
+        end})
 end
 
-local printSolution
-local search
 local function solve()
     print("Not implemented - solve")
-    search()
-    printSolution()
+    while(isAllSolved() == false) do
+        local bestMove = search()
+        addDrop(removeDrop(tubes[bestMove.from]), tubes[bestMove.to], true)
+    end
+    --search()
+    --printSolution()
 end
 
 local menu = {
@@ -161,7 +182,7 @@ local function isSolved(tube)
     return true
 end
 
-local function isAllSolved()
+isAllSolved = function()
     -- Are all tubes complete (or empty)
     for k,tube in ipairs(tubes) do
         if not isEmpty(tube) and not isSolved(tube) then return false end
@@ -198,12 +219,12 @@ local function endLevel()
 	composer.gotoScene("highscores", { time=1000, effect="crossFade" })
 end
 
-printSolution = function()
-    print("Solution\n\tFrom\tTo\t\tScore")
-    for _,move in ipairs(solution) do
-        print(move.from, move.to, move.score)
-    end
-end
+--printSolution = function()
+--    print("Solution\n\tFrom\tTo\t\tScore")
+--    for _,move in ipairs(solution) do
+--        print(move.from, move.to, move.score)
+--    end
+--end
 
 
 local function topColor(tube) 
@@ -232,7 +253,7 @@ search = function()
                    if fromTube.k~=toTube.k and not isFull(toTube) and (isEmpty(toTube) or topColor(toTube)==drop.color) then
                     if debug then print(indent, "to", toTube.k) end
                         addDrop(removeDrop(fromTube), toTube)
-                        local score = rsearch(depth+1, maxDepth)
+                        local score = rsearch(depth+1, maxDepth, false)
                         if debug then print(indent, "score", score) end
                         addDrop(removeDrop(toTube), fromTube)
                         if score > bestMove.score then
@@ -243,21 +264,17 @@ search = function()
                 --table.insert(fromTube.drops, drop)
             end
         end
-        print(indent, "Best Score", bestMove.score)
+        --print(indent, "Best Score", bestMove.score)
         if depth==1 then
-            table.insert(solution, bestMove) 
+            solution = bestMove
         end
 
         return bestMove.score
     end
-    rsearch(1, 1)
+    rsearch(1, 3, false)
 
     state = 'playing'
-
-    print("Solution")
-    for _,move in ipairs(solution) do
-        print(move.from, move.to, move.score)
-    end
+    return solution
 end
 
 addDrop = function(drop, tube, animate)
