@@ -21,16 +21,22 @@ local startLevel
 local removeDrop
 local addDrop
 local search
-local printSolution
 local printState
 local isAllSolved
+local solveNextMove
+local computeScore
 
 -- UI Variables
 local uiFontSize = 15
 local movesText
 local timeText
-local scoreText
 
+-- Variables
+local bestMoveCounter = 0
+local gaveUp = false
+local startingTime = 0
+local hintCounter = 0
+local difficulty
 
 local FULL = 4  -- number of drops to full a tube
 -- local level = {1,2,2,90}
@@ -64,7 +70,7 @@ local timeRemainingTimer
 local levelOver = false
 
 local function quit()
-    print("Not implemented - quit")
+    composer.gotoScene("menu")
 end
 
 local function reset()
@@ -84,7 +90,7 @@ local function reset()
         selectedDrop = nil
     end
     timer.cancel(timeRemainingTimer)
-    display.remove(scoreText)
+    --display.remove(scoreText)
     startLevel(level)
 end
 
@@ -99,28 +105,31 @@ end
 
 local function hint()
     local bestMove = search()
-
-    local fromTube = tubes[bestMove.from]
-    local drop = fromTube.drops[#fromTube.drops]
-    local toTube = tubes[bestMove.to]
-
-    transition.moveTo(drop, {x=toTube.x, y=toTube.y + 69 - (#toTube.drops) * 42, time=300, 
-        onComplete=function ()
-            transition.moveTo(drop, {x=toTube.x, y=toTube.y + 69 - (#toTube.drops) * 42, time=750, 
-                onComplete=function ()
-                    transition.moveTo(drop, {x=fromTube.x, y=fromTube.y + 69 - (#fromTube.drops-1) * 42, time=300})
-                end})
-        end})
+    print(bestMove.from, bestMove.to, bestMove.score)
+    local function returnDrop()
+        addDrop(removeDrop(tubes[bestMove.to], true), tubes[bestMove.from], true)
+    end
+    addDrop(removeDrop(tubes[bestMove.from], true), tubes[bestMove.to], true)
+    --timer.performWithDelay(5, computeScore)
+    hintCounter = hintCounter + 1
+    timer.performWithDelay(1000, returnDrop)
+    timer.performWithDelay(1005, computeScore)
 end
 
-local function solve()
-    print("Not implemented - solve")
-    while(isAllSolved() == false) do
+local function solve(animate)
+    solveNextMove(animate)
+end
+
+solveNextMove = function(isAnimated)
+    if not isAllSolved() then
         local bestMove = search()
-        addDrop(removeDrop(tubes[bestMove.from]), tubes[bestMove.to], true)
+        bestMoveCounter = bestMoveCounter + 1
+        gaveUp = true
+        addDrop(removeDrop(tubes[bestMove.from], true), tubes[bestMove.to], isAnimated)
+        if(isAnimated) then
+            timer.performWithDelay(500, solveNextMove)
+        end
     end
-    --search()
-    --printSolution()
 end
 
 local menu = {
@@ -191,7 +200,7 @@ isAllSolved = function()
     return true
 end
 
-local function computeScore()
+computeScore = function()
     local total = 0
     local score = 0
     for _,tube in ipairs(tubes) do
@@ -204,28 +213,22 @@ local function computeScore()
                 score = score + k
             end
         end
-
-        tube.label.text = tube.k .. " (" .. score .. ")"
         total = total + score
     end
 
-    scoreText.text = total
+    --scoreText.text = total
     return total
 end
 
 local function endLevel()
-	local total = computeScore()
-	composer.setVariable("score", total)
+    if gaveUp == false then
+        print("Proper Ending")
+        local total = bestMoveCounter - #moves
+        total = ((9999 + total*100) - ((startingTime - timeRemaining) * 250) - (hintCounter * 500)) * (#tubes * (difficulty/100))
+	    composer.setVariable("score", total)
+    end
 	composer.gotoScene("highscores", { time=1000, effect="crossFade" })
 end
-
---printSolution = function()
---    print("Solution\n\tFrom\tTo\t\tScore")
---    for _,move in ipairs(solution) do
---        print(move.from, move.to, move.score)
---    end
---end
-
 
 local function topColor(tube) 
     if isEmpty(tube) then return nil end
@@ -271,7 +274,7 @@ search = function()
 
         return bestMove.score
     end
-    rsearch(1, 3, false)
+    rsearch(1, 1, false)
 
     state = 'playing'
     return solution
@@ -296,7 +299,6 @@ addDrop = function(drop, tube, animate)
     -- append drop to tube drop collection
     table.insert(tube.drops, drop)
 end
-
 
 removeDrop = function(tube, animate)
     -- remove and returns the top drop from given tube or nil.
@@ -370,8 +372,10 @@ startLevel = function(level)
     -- number of colors, number of spare tubes, level difficulty and duration
     local nColors, nSwap, nDifficulty, duration = table.unpack(level)
     local nTubes = nColors + nSwap
+    startingTime = duration
+    difficulty = nDifficulty
 
-    scoreText = display.newText(uiGroup, "score", display.contentCenterX, 60, native.systemfont, 15)
+    --scoreText = display.newText(uiGroup, "score", display.contentCenterX, 60, native.systemfont, 15)
 
     -- instantiate all of the tubes
     for k = 1, nTubes do
@@ -383,7 +387,6 @@ startLevel = function(level)
         tube.x = display.contentCenterX - (nTubes/2-k+0.5)*80
 
         tube.k = k
-        tube.label = display.newText(mainGroup, k, tube.x, tube.y+tube.height/2+10, native.systemfont, 15)
 
         -- table property drops to store drops
         tube.drops = {}
@@ -457,6 +460,12 @@ function scene:create( event )
 	timeText = myNewLabel(uiGroup, display, "Time: 0", x + 8, movesText.y, uiFontSize*0.9)
 
 	startLevel(level)
+
+    solve(false)
+    reset()
+    computeScore()
+    gaveUp = false
+    print("This is the best amount of moves: " .. bestMoveCounter)
 end
 
 -- show()

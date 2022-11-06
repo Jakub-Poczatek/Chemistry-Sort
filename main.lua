@@ -3,8 +3,8 @@ local composer = require("composer")
 -- Hide status bar
 display.setStatusBar(display.HiddenStatusBar)
 
--- Seed the random number generator
-math.randomseed(os.time())
+-- Set the highscore to impossible number
+composer.setVariable("score", 0)
 
 -- Go to the menu screen
 composer.gotoScene("menu")
