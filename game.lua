@@ -25,6 +25,7 @@ local printState
 local isAllSolved
 local solveNextMove
 local computeScore
+local endLevel
 
 -- UI Variables
 local uiFontSize = 15
@@ -37,11 +38,18 @@ local gaveUp = false
 local startingTime = 0
 local hintCounter = 0
 local difficulty
+local running = true
+local rngSeedCopy
+local previousMove
+local repeating
+
+-- Testing
+local staticRng = 42
 
 local FULL = 4  -- number of drops to full a tube
 -- local level = {1,2,2,90}
 -- local level = {2,2,3,90}
-local level = {3,2,50,90}
+local level = {4,2,50,90}
 local tubes = { }
 local selectedDrop
 local state -- playing
@@ -70,10 +78,11 @@ local timeRemainingTimer
 local levelOver = false
 
 local function quit()
+    running = false
     composer.gotoScene("menu")
 end
 
-local function reset()
+local function reset(unique)
     -- remove existing display objects
     for t = #tubes, 1, -1 do
         local tube = tubes[t]
@@ -91,7 +100,11 @@ local function reset()
     end
     timer.cancel(timeRemainingTimer)
     --display.remove(scoreText)
-    startLevel(level)
+    startLevel(level, unique)
+    running = false
+    timer.performWithDelay(100, function ()
+        running = true
+    end)
 end
 
 local function undo()
@@ -105,29 +118,55 @@ end
 
 local function hint()
     local bestMove = search()
-    print(bestMove.from, bestMove.to, bestMove.score)
     local function returnDrop()
         addDrop(removeDrop(tubes[bestMove.to], true), tubes[bestMove.from], true)
     end
     addDrop(removeDrop(tubes[bestMove.from], true), tubes[bestMove.to], true)
-    --timer.performWithDelay(5, computeScore)
     hintCounter = hintCounter + 1
-    timer.performWithDelay(1000, returnDrop)
-    timer.performWithDelay(1005, computeScore)
+    timer.performWithDelay(1000, function ()
+        if running then
+            returnDrop()
+        end
+    end)
+    timer.performWithDelay(1005, function ()
+        if running then
+            computeScore()
+        end
+    end)
 end
 
 local function solve(animate)
+    previousMove = {from=0, to=0}
+    repeating = false
+
     solveNextMove(animate)
+
+    if repeating then
+        staticRng = staticRng + 1
+        reset(true)
+        timer.performWithDelay( 105, function ()
+            solve(false)
+            reset(false)
+        end )
+    end
 end
 
 solveNextMove = function(isAnimated)
-    if not isAllSolved() then
+    if not isAllSolved() and running and not repeating then
         local bestMove = search()
+
+        if(previousMove.from == bestMove.to) and (previousMove.to == bestMove.from) then
+            repeating = true
+        end
+
+        previousMove = {from=bestMove.from, to=bestMove.to}
         bestMoveCounter = bestMoveCounter + 1
         gaveUp = true
         addDrop(removeDrop(tubes[bestMove.from], true), tubes[bestMove.to], isAnimated)
         if(isAnimated) then
             timer.performWithDelay(500, solveNextMove)
+        else 
+            solveNextMove(false)
         end
     end
 end
@@ -162,10 +201,9 @@ local function updateClock()
     local minutes = math.floor(timeRemaining/60)
     local s = string.format("%02d:%02d", minutes, seconds)
     timeText.text = "Time: "..s
-end
-
-local function update()
-
+    if timeRemaining == 0 then
+        endLevel()
+    end
 end
 
 local function isEmpty(tube)
@@ -196,7 +234,6 @@ isAllSolved = function()
     for k,tube in ipairs(tubes) do
         if not isEmpty(tube) and not isSolved(tube) then return false end
     end
-
     return true
 end
 
@@ -220,14 +257,19 @@ computeScore = function()
     return total
 end
 
-local function endLevel()
+endLevel = function()
     if gaveUp == false then
         print("Proper Ending")
+        local previousScore = composer.getVariable( "score" )
         local total = bestMoveCounter - #moves
-        total = ((9999 + total*100) - ((startingTime - timeRemaining) * 250) - (hintCounter * 500)) * (#tubes * (difficulty/100))
+        total = ((9999 + total*100) - 
+        ((startingTime - timeRemaining) * 250) - 
+        (hintCounter * 500)) * 
+        (#tubes * (difficulty/100)) + 
+        previousScore
 	    composer.setVariable("score", total)
     end
-	composer.gotoScene("highscores", { time=1000, effect="crossFade" })
+	composer.gotoScene("next", { time=1000, effect="crossFade" })
 end
 
 local function topColor(tube) 
@@ -327,13 +369,15 @@ local function moveDrop(event)
     print("tube:moveDrop", tube.k)
 
     -- Pick up/drop a drop from/to selected tube.
-    if selectedDrop==nil then -- pickup
+    if #tube.drops == 0 and selectedDrop==nil then
+        return
+    elseif selectedDrop==nil then -- pickup
         selectedDrop = removeDrop(tube, true)
         selectedDrop.k = tube.k
     elseif tube.k == selectedDrop.k then -- canceling a move
         addDrop(selectedDrop, tube, true)
         selectedDrop = nil
-    else -- dropping  
+    else -- dropping
         local colorMatch = (not isEmpty(tube) and selectedDrop.color==tube.drops[#tube.drops].color)   
         if (not isFull(tube) and colorMatch) or isEmpty(tube) then
             addDrop(selectedDrop, tube, true)
@@ -366,7 +410,7 @@ printState = function()
 end
 
 
-startLevel = function(level)
+startLevel = function(level, unique)
     -- create level with given parameters
 
     -- number of colors, number of spare tubes, level difficulty and duration
@@ -407,7 +451,12 @@ startLevel = function(level)
         end
     end
 
-    rng.randomseed(42)
+    if(unique) then
+        rngSeedCopy = rng.randomseed(os.time())
+        --rngSeedCopy = rng.randomseed(staticRng)
+    else 
+        rng.randomseed(rngSeedCopy)
+    end
 
     -- using nDifficulty randomise the starting position
        -- possible algorithm: 
@@ -459,10 +508,11 @@ function scene:create( event )
 	end
 	timeText = myNewLabel(uiGroup, display, "Time: 0", x + 8, movesText.y, uiFontSize*0.9)
 
-	startLevel(level)
+	startLevel(level, true)
 
     solve(false)
-    reset()
+    print("This is the best moves: ", bestMoveCounter)
+    reset(false)
     computeScore()
     gaveUp = false
     print("This is the best amount of moves: " .. bestMoveCounter)

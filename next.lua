@@ -8,12 +8,12 @@ local scene = composer.newScene()
 -- the scene is removed entirely (not recycled) via "composer.removeScene()"
 -- -----------------------------------------------------------------------------------
 
-local function gotoGame()
-	composer.gotoScene("game", { time=800, effect="crossFade" })
+local function gotoHighScores()
+    composer.gotoScene("highscores", {time=800, effect="crossFade"})
 end
 
-local function gotoHighScores()
-	composer.gotoScene("highscores", { time=800, effect="crossFade" })
+local function gotoGame()
+    composer.gotoScene("game", {time=800, effect="crossFade"})
 end
 
 -- -----------------------------------------------------------------------------------
@@ -23,19 +23,22 @@ end
 -- create()
 function scene:create( event )
 
-	local sceneGroup = self.view
+    local sceneGroup = self.view
 	-- Code here runs when the scene is first created but has not yet appeared on screen
+    
+    local score = composer.getVariable( "score" )
 
-	local title = display.newText(sceneGroup, "Chemistry Sort", display.contentCenterX, display.contentCenterY-125, native.systemFont, 30)
+	local title = display.newText(sceneGroup, score, display.contentCenterX, display.contentCenterY-75, native.systemFont, 30)
 
-	local playButton = display.newText(sceneGroup, "Play", display.contentCenterX, display.contentCenterY, native.systemFont, 30)
-	playButton:setFillColor(0.82, 0.86, 1)
+	local continueButton = display.newText(sceneGroup, "Continue", display.contentCenterX, display.contentCenterY, native.systemFont, 30)
+	continueButton:setFillColor(0.82, 0.86, 1)
 
-	local highscoresButton = display.newText(sceneGroup, "Highscores", display.contentCenterX, display.contentCenterY + 50, native.systemFont, 30)
-	highscoresButton:setFillColor(0.75, 0.78, 1)
+	local endButton = display.newText(sceneGroup, "End", display.contentCenterX, display.contentCenterY + 50, native.systemFont, 30)
+    endButton:setFillColor(0.75, 0.78, 1)
 
-	playButton:addEventListener("tap", gotoGame)
-	highscoresButton:addEventListener("tap", gotoHighScores)
+	continueButton:addEventListener("tap", gotoGame)
+    endButton:addEventListener("tap", gotoHighScores)
+
 end
 
 
@@ -66,7 +69,7 @@ function scene:hide( event )
 
 	elseif ( phase == "did" ) then
 		-- Code here runs immediately after the scene goes entirely off screen
-
+		composer.removeScene( "next" )
 	end
 end
 

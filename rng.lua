@@ -15,6 +15,7 @@ rng.MAX = 32768
 
 rng.randomseed = function(new_seed)
     rng.state = (new_seed * rng.a + rng.c) % rng.m
+    return new_seed
 end
 
 
